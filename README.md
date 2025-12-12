@@ -20,7 +20,7 @@
 - ✅ GET /api/customers/status/{status} - Filter by status
 - ✅ Pagination and sorting
 - ✅ PATCH for partial update
-- [ ] Bonus features
+- ✅ HATEOAS Links
 
 ## How to Run
 1. Create database: `customer_management`
