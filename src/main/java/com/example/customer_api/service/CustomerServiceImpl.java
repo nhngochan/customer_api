@@ -3,13 +3,18 @@ package com.example.customer_api.service;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.example.customer_api.dto.CustomerRequestDTO;
 import com.example.customer_api.dto.CustomerResponseDTO;
+import com.example.customer_api.dto.CustomerUpdateDTO;
 import com.example.customer_api.entity.Customer;
+import com.example.customer_api.entity.CustomerStatus;
 import com.example.customer_api.exception.DuplicateResourceException;
 import com.example.customer_api.exception.ResourceNotFoundException;
 import com.example.customer_api.repository.CustomerRepository;
@@ -20,7 +25,6 @@ public class CustomerServiceImpl implements CustomerService {
     
     private final CustomerRepository customerRepository;
     
-    @Autowired
     public CustomerServiceImpl(CustomerRepository customerRepository) {
         this.customerRepository = customerRepository;
     }
@@ -32,6 +36,27 @@ public class CustomerServiceImpl implements CustomerService {
                 .map(this::convertToResponseDTO)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public Page<CustomerResponseDTO> getAllCustomers(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        return customerRepository.findAll(pageable)
+                .map(this::convertToResponseDTO);
+    }
+
+    @Override
+    public Page<CustomerResponseDTO> getAllCustomers(int page, int size, String sortBy, String sortDir) {
+        Sort sort = sortDir.equalsIgnoreCase("asc")
+                ? Sort.by(sortBy).ascending()
+                : Sort.by(sortBy).descending();
+
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        return customerRepository.findAll(pageable)
+                .map(this::convertToResponseDTO);
+    }
+
+
     
     @Override
     public CustomerResponseDTO getCustomerById(Long id) {
@@ -102,11 +127,58 @@ public class CustomerServiceImpl implements CustomerService {
     
     @Override
     public List<CustomerResponseDTO> getCustomersByStatus(String status) {
-        return customerRepository.findByStatus(status)
+        CustomerStatus customerStatus;
+        try {
+            customerStatus = CustomerStatus.valueOf(status.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Invalid status: " + status);
+        }
+        return customerRepository.findByStatus(customerStatus)
                 .stream()
                 .map(this::convertToResponseDTO)
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public List<CustomerResponseDTO> advancedSearch(String name, String email, String status) {
+        CustomerStatus customerStatus = null;
+        if (status != null && !status.isBlank()) {
+            try {
+                customerStatus = CustomerStatus.valueOf(status.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new RuntimeException("Invalid status: " + status);
+            }
+        }
+        return customerRepository.advancedSearch(name, email, customerStatus)
+                .stream()
+                .map(this::convertToResponseDTO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public CustomerResponseDTO partialUpdateCustomer(Long id, CustomerUpdateDTO updateDTO) {
+        Customer customer = customerRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + id));
+
+        // Only update non-null fields
+        if (updateDTO.getFullName() != null) {
+            customer.setFullName(updateDTO.getFullName());
+        }
+        if (updateDTO.getEmail() != null) {
+            customer.setEmail(updateDTO.getEmail());
+        }
+        if (updateDTO.getPhone() != null) {
+            customer.setPhone(updateDTO.getPhone());
+        }
+        if (updateDTO.getAddress() != null) {
+            customer.setAddress(updateDTO.getAddress());
+        }
+
+        Customer updatedCustomer = customerRepository.save(customer);
+        return convertToResponseDTO(updatedCustomer);
+    }
+
+
     
     // Helper Methods for DTO Conversion
     

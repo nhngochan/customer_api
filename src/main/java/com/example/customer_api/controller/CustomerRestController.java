@@ -4,12 +4,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -20,33 +23,53 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.example.customer_api.dto.CustomerRequestDTO;
 import com.example.customer_api.dto.CustomerResponseDTO;
+import com.example.customer_api.dto.CustomerUpdateDTO;
 import com.example.customer_api.service.CustomerService;
 
 import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/customers")
-@CrossOrigin(origins = "*")  // Allow CORS for frontend
+@CrossOrigin(origins = "*")
 public class CustomerRestController {
     
     private final CustomerService customerService;
     
-    @Autowired
     public CustomerRestController(CustomerService customerService) {
         this.customerService = customerService;
     }
     
     // GET all customers
     @GetMapping
-    public ResponseEntity<List<CustomerResponseDTO>> getAllCustomers() {
-        List<CustomerResponseDTO> customers = customerService.getAllCustomers();
-        return ResponseEntity.ok(customers);
+    public ResponseEntity<Map<String, Object>> getAllCustomers(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "asc") String sortDir) {
+
+        Page<CustomerResponseDTO> customerPage =
+                customerService.getAllCustomers(page, size, sortBy, sortDir);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("customers", customerPage.getContent());
+        response.put("currentPage", customerPage.getNumber());
+        response.put("totalItems", customerPage.getTotalElements());
+        response.put("totalPages", customerPage.getTotalPages());
+
+        return ResponseEntity.ok(response);
     }
+
+
     
     // GET customer by ID
     @GetMapping("/{id}")
     public ResponseEntity<CustomerResponseDTO> getCustomerById(@PathVariable Long id) {
         CustomerResponseDTO customer = customerService.getCustomerById(id);
+
+        customer.add(linkTo(methodOn(CustomerRestController.class).getCustomerById(id)).withSelfRel());
+        customer.add(linkTo(methodOn(CustomerRestController.class).getAllCustomers(0, 10, "id", "asc")).withRel("all-customers"));
+
+
         return ResponseEntity.ok(customer);
     }
     
@@ -64,6 +87,16 @@ public class CustomerRestController {
             @Valid @RequestBody CustomerRequestDTO requestDTO) {
         CustomerResponseDTO updatedCustomer = customerService.updateCustomer(id, requestDTO);
         return ResponseEntity.ok(updatedCustomer);
+    }
+
+    // PATCH update customer (Partial Update) - NEW IMPLEMENTATION
+    @PatchMapping("/{id}")
+    public ResponseEntity<CustomerResponseDTO> partialUpdateCustomer(
+            @PathVariable Long id,
+            @RequestBody CustomerUpdateDTO updateDTO) {
+        
+        CustomerResponseDTO updated = customerService.partialUpdateCustomer(id, updateDTO);
+        return ResponseEntity.ok(updated);
     }
     
     // DELETE customer
@@ -87,5 +120,16 @@ public class CustomerRestController {
     public ResponseEntity<List<CustomerResponseDTO>> getCustomersByStatus(@PathVariable String status) {
         List<CustomerResponseDTO> customers = customerService.getCustomersByStatus(status);
         return ResponseEntity.ok(customers);
+    }
+
+    // Get customers (Advance search)
+    @GetMapping("/advanced-search")
+    public ResponseEntity<List<CustomerResponseDTO>> advancedSearch(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String email,
+            @RequestParam(required = false) String status) {
+
+        List<CustomerResponseDTO> result = customerService.advancedSearch(name, email, status);
+        return ResponseEntity.ok(result);
     }
 }
