@@ -3,8 +3,7 @@
 ## Student Information
 - **Name:** Nguyễn Hồng Ngọc Hân
 - **Student ID:** ITCSIU22229
-- **Class:** [Your Class]
-
+- **Class:** IT093IU
 ## API Endpoints
 
 ### Base URL
